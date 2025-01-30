@@ -1,0 +1,125 @@
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# Check if the script is running as Administrator
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Start-Process powershell "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+    exit
+}
+
+# Create the form
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "File and Folder Search"
+$form.Size = New-Object System.Drawing.Size(800, 600)
+
+# Create a label for the search path
+$label = New-Object System.Windows.Forms.Label
+$label.Text = "Select Drive or Folder to Search:"
+$label.Location = New-Object System.Drawing.Point(10, 20)
+$label.AutoSize = $true
+$form.Controls.Add($label)
+
+# Create a textbox for the search path
+$textBox = New-Object System.Windows.Forms.TextBox
+$textBox.Location = New-Object System.Drawing.Point(10, 50)
+$textBox.Size = New-Object System.Drawing.Size(500, 20)
+$form.Controls.Add($textBox)
+
+# Create a button to browse for a folder
+$browseButton = New-Object System.Windows.Forms.Button
+$browseButton.Text = "Browse"
+$browseButton.Location = New-Object System.Drawing.Point(520, 48)
+$browseButton.Size = New-Object System.Drawing.Size(75, 23)
+$browseButton.Add_Click({
+    $folderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog
+    $result = $folderBrowser.ShowDialog()
+    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+        $textBox.Text = $folderBrowser.SelectedPath
+    }
+})
+$form.Controls.Add($browseButton)
+
+# Create a button to start the search
+$searchButton = New-Object System.Windows.Forms.Button
+$searchButton.Text = "Search"
+$searchButton.Location = New-Object System.Drawing.Point(610, 48)
+$searchButton.Size = New-Object System.Drawing.Size(75, 23)
+$searchButton.Add_Click({
+    $searchPath = $textBox.Text
+    if (-not (Test-Path $searchPath)) {
+        [System.Windows.Forms.MessageBox]::Show("Invalid path. Please select a valid drive or folder.", "Error")
+        return
+    }
+
+    $listView.Items.Clear()
+    $items = Get-ChildItem -Path $searchPath -Recurse -ErrorAction SilentlyContinue | Select-Object Name, FullName, Length
+
+    foreach ($item in $items) {
+        $sizeMB = if ($item.Length) { [math]::Round($item.Length / 1MB, 2) } else { 0 }
+        $listItem = New-Object System.Windows.Forms.ListViewItem($item.Name)
+        $listItem.SubItems.Add($item.FullName)
+        $listItem.SubItems.Add($sizeMB)
+        $listView.Items.Add($listItem)
+    }
+})
+$form.Controls.Add($searchButton)
+
+# Create a list view to display the results
+$listView = New-Object System.Windows.Forms.ListView
+$listView.Location = New-Object System.Drawing.Point(10, 90)
+$listView.Size = New-Object System.Drawing.Size(760, 400)
+$listView.View = [System.Windows.Forms.View]::Details
+$listView.Columns.Add("Name", 200)
+$listView.Columns.Add("Full Path", 400)
+$listView.Columns.Add("Size (MB)", 100)
+$listView.FullRowSelect = $true
+$listView.Sorting = [System.Windows.Forms.SortOrder]::None
+$form.Controls.Add($listView)
+
+# Create a button to organize results by size
+$organizeButton = New-Object System.Windows.Forms.Button
+$organizeButton.Text = "Organize by Size"
+$organizeButton.Location = New-Object System.Drawing.Point(10, 500)
+$organizeButton.Size = New-Object System.Drawing.Size(120, 23)
+$organizeButton.Add_Click({
+    # Custom sorting by size (column index 2)
+    $listView.BeginUpdate()
+    $items = @()
+    foreach ($item in $listView.Items) {
+        $items += $item
+    }
+    $sortedItems = $items | Sort-Object { [decimal]($_.SubItems[2].Text) }
+    $listView.Items.Clear()
+    $listView.Items.AddRange($sortedItems)
+    $listView.EndUpdate()
+})
+$form.Controls.Add($organizeButton)
+
+# Create a button to go to the file location
+$goToLocationButton = New-Object System.Windows.Forms.Button
+$goToLocationButton.Text = "Go to File Location"
+$goToLocationButton.Location = New-Object System.Drawing.Point(140, 500)
+$goToLocationButton.Size = New-Object System.Drawing.Size(140, 23)
+$goToLocationButton.Enabled = $false
+$goToLocationButton.Add_Click({
+    if ($listView.SelectedItems.Count -gt 0) {
+        $selectedItem = $listView.SelectedItems[0]
+        $filePath = $selectedItem.SubItems[1].Text
+        if (Test-Path $filePath) {
+            $folderPath = Split-Path $filePath -Parent
+            Start-Process explorer.exe -ArgumentList "/select, `"$filePath`""
+        } else {
+            [System.Windows.Forms.MessageBox]::Show("The selected file no longer exists.", "Error")
+        }
+    }
+})
+$form.Controls.Add($goToLocationButton)
+
+# Enable/disable the "Go to File Location" button based on selection
+$listView.Add_ItemSelectionChanged({
+    $goToLocationButton.Enabled = $listView.SelectedItems.Count -gt 0
+})
+
+# Show the form
+$form.Add_Shown({$form.Activate()})
+[void]$form.ShowDialog()
