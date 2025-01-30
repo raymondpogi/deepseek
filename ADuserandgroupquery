@@ -1,0 +1,181 @@
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# Create the form
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "AD User and Group Query"
+$form.Size = New-Object System.Drawing.Size(1000, 600) # Adjusted form size
+$form.StartPosition = "CenterScreen"
+
+# Create a label for the user input
+$userLabel = New-Object System.Windows.Forms.Label
+$userLabel.Text = "Enter Username:"
+$userLabel.Location = New-Object System.Drawing.Point(10, 20)
+$userLabel.AutoSize = $true
+$form.Controls.Add($userLabel)
+
+# Create a text box for the user input
+$userTextBox = New-Object System.Windows.Forms.TextBox
+$userTextBox.Location = New-Object System.Drawing.Point(10, 50)
+$userTextBox.Size = New-Object System.Drawing.Size(200, 20)
+$form.Controls.Add($userTextBox)
+
+# Create a button to run the Net User command (exact match)
+$userButton = New-Object System.Windows.Forms.Button
+$userButton.Text = "Run Net User"
+$userButton.Location = New-Object System.Drawing.Point(220, 50)
+$userButton.Size = New-Object System.Drawing.Size(100, 23)
+$userButton.Add_Click({
+    $outputTextBox.Clear()
+    $username = $userTextBox.Text
+    if ($username) {
+        # Run net user for exact username match
+        $output = net user $username /domain
+        if ($output -match "User name") {
+            $outputTextBox.Lines = $output
+        } else {
+            $outputTextBox.Text = "No user found with the exact username '$username'."
+        }
+    } else {
+        $outputTextBox.Text = "Please enter a username."
+    }
+})
+$form.Controls.Add($userButton)
+
+# Create a button to search for users (partial match)
+$searchUserButton = New-Object System.Windows.Forms.Button
+$searchUserButton.Text = "Search User"
+$searchUserButton.Location = New-Object System.Drawing.Point(220, 80) # Below Run Net User
+$searchUserButton.Size = New-Object System.Drawing.Size(100, 23)
+$searchUserButton.Add_Click({
+    $outputTextBox.Clear()
+    $username = $userTextBox.Text
+    if ($username) {
+        # Get all users and filter by partial match
+        $users = net user /domain | Where-Object { $_ -match "User name" -or $_ -match $username }
+        if ($users) {
+            $outputTextBox.Lines = $users
+        } else {
+            $outputTextBox.Text = "No users found matching '$username'."
+        }
+    } else {
+        $outputTextBox.Text = "Please enter a username (partial or full)."
+    }
+})
+$form.Controls.Add($searchUserButton)
+
+# Create a label for the group input
+$groupLabel = New-Object System.Windows.Forms.Label
+$groupLabel.Text = "Enter AD Group Name:"
+$groupLabel.Location = New-Object System.Drawing.Point(10, 120)
+$groupLabel.AutoSize = $true
+$form.Controls.Add($groupLabel)
+
+# Create a text box for the group input
+$groupTextBox = New-Object System.Windows.Forms.TextBox
+$groupTextBox.Location = New-Object System.Drawing.Point(10, 150)
+$groupTextBox.Size = New-Object System.Drawing.Size(200, 20)
+$form.Controls.Add($groupTextBox)
+
+# Create a button to run the Net Group command (exact match)
+$groupButton = New-Object System.Windows.Forms.Button
+$groupButton.Text = "Run Net Group"
+$groupButton.Location = New-Object System.Drawing.Point(220, 150)
+$groupButton.Size = New-Object System.Drawing.Size(100, 23)
+$groupButton.Add_Click({
+    $outputTextBox.Clear()
+    $groupname = $groupTextBox.Text
+    if ($groupname) {
+        # Run net group for exact group name match
+        $output = net group $groupname /domain
+        if ($output -match "Group name") {
+            $outputTextBox.Lines = $output
+        } else {
+            $outputTextBox.Text = "No group found with the exact name '$groupname'."
+        }
+    } else {
+        $outputTextBox.Text = "Please enter a group name."
+    }
+})
+$form.Controls.Add($groupButton)
+
+# Create a button to search for groups (partial match)
+$searchGroupButton = New-Object System.Windows.Forms.Button
+$searchGroupButton.Text = "Search Group"
+$searchGroupButton.Location = New-Object System.Drawing.Point(220, 180) # Below Run Net Group
+$searchGroupButton.Size = New-Object System.Drawing.Size(100, 23)
+$searchGroupButton.Add_Click({
+    $outputTextBox.Clear()
+    $groupname = $groupTextBox.Text
+    if ($groupname) {
+        # Get all groups and filter by partial match
+        $groups = net group /domain | Where-Object { $_ -match "Group name" -or $_ -match $groupname }
+        if ($groups) {
+            $outputTextBox.Lines = $groups
+        } else {
+            $outputTextBox.Text = "No groups found matching '$groupname'."
+        }
+    } else {
+        $outputTextBox.Text = "Please enter a group name (partial or full)."
+    }
+})
+$form.Controls.Add($searchGroupButton)
+
+# Create a text box to display the output
+$outputTextBox = New-Object System.Windows.Forms.TextBox
+$outputTextBox.Location = New-Object System.Drawing.Point(350, 20)
+$outputTextBox.Size = New-Object System.Drawing.Size(620, 500) # Adjusted size
+$outputTextBox.Multiline = $true
+$outputTextBox.ScrollBars = "Vertical"
+$form.Controls.Add($outputTextBox)
+
+# Create a button to copy the output to clipboard
+$copyButton = New-Object System.Windows.Forms.Button
+$copyButton.Text = "Copy to Clipboard"
+$copyButton.Location = New-Object System.Drawing.Point(350, 530) # Adjusted position
+$copyButton.Size = New-Object System.Drawing.Size(120, 23)
+$copyButton.Add_Click({
+    if ($outputTextBox.Text) {
+        [System.Windows.Forms.Clipboard]::SetText($outputTextBox.Text)
+        [System.Windows.Forms.MessageBox]::Show("Output copied to clipboard!", "Success", "OK", "Information")
+    } else {
+        [System.Windows.Forms.MessageBox]::Show("No output to copy.", "Warning", "OK", "Warning")
+    }
+})
+$form.Controls.Add($copyButton)
+
+# Create a button to export the output to CSV
+$exportButton = New-Object System.Windows.Forms.Button
+$exportButton.Text = "Export to CSV"
+$exportButton.Location = New-Object System.Drawing.Point(480, 530) # Adjusted position
+$exportButton.Size = New-Object System.Drawing.Size(120, 23)
+$exportButton.Add_Click({
+    if ($outputTextBox.Text) {
+        $saveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
+        $saveFileDialog.Filter = "CSV Files (*.csv)|*.csv"
+        $saveFileDialog.Title = "Save Output as CSV"
+        if ($saveFileDialog.ShowDialog() -eq "OK") {
+            $outputTextBox.Lines | Out-File -FilePath $saveFileDialog.FileName
+            [System.Windows.Forms.MessageBox]::Show("Output exported to CSV!", "Success", "OK", "Information")
+        }
+    } else {
+        [System.Windows.Forms.MessageBox]::Show("No output to export.", "Warning", "OK", "Warning")
+    }
+})
+$form.Controls.Add($exportButton)
+
+# Create a button to clear/restart
+$clearButton = New-Object System.Windows.Forms.Button
+$clearButton.Text = "Clear/Restart"
+$clearButton.Location = New-Object System.Drawing.Point(10, 210)
+$clearButton.Size = New-Object System.Drawing.Size(100, 23)
+$clearButton.Add_Click({
+    $userTextBox.Clear()
+    $groupTextBox.Clear()
+    $outputTextBox.Clear()
+})
+$form.Controls.Add($clearButton)
+
+# Show the form
+$form.Add_Shown({$form.Activate()})
+[void]$form.ShowDialog()
